@@ -1,6 +1,28 @@
 const axios = require('axios');
 const UserStats = require('../models/UserStats');
 
+// Global cache for Codeforces problemset to avoid fetching 9,000 problems on every request
+let cfProblemsetCache = null;
+let cfProblemsetLastFetched = 0;
+
+async function getCFProblemset() {
+  const oneDay = 24 * 60 * 60 * 1000;
+  if (cfProblemsetCache && (Date.now() - cfProblemsetLastFetched < oneDay)) {
+    return cfProblemsetCache;
+  }
+  try {
+    const res = await axios.get('https://codeforces.com/api/problemset.problems');
+    if (res.data.status === 'OK') {
+      cfProblemsetCache = res.data.result.problems;
+      cfProblemsetLastFetched = Date.now();
+      return cfProblemsetCache;
+    }
+  } catch (error) {
+    console.error('Failed to fetch CF problemset:', error.message);
+  }
+  return [];
+}
+
 const TAG_ALIASES = {
   'dp': 'Dynamic Programming',
   'dynamic programming': 'Dynamic Programming',
@@ -30,9 +52,70 @@ const TAG_ALIASES = {
   'bitmasks': 'Bitmasks'
 };
 
+// Reverse mapping to find original CF tags for recommendations
+const REVERSE_TAGS = {
+  'Dynamic Programming': 'dp',
+  'Math': 'math',
+  'Graph': 'graphs',
+  'Two Pointers': 'two pointers',
+  'Greedy': 'greedy',
+  'String': 'string',
+  'Data Structures': 'data structures',
+  'Binary Search': 'binary search',
+  'DFS/BFS': 'dfs and similar',
+  'Tree': 'trees',
+  'Sorting': 'sortings',
+  'Implementation': 'implementation',
+  'Brute Force': 'brute force',
+  'Constructive': 'constructive algorithms',
+  'Number Theory': 'number theory',
+  'Geometry': 'geometry',
+  'Bitmasks': 'bitmasks'
+};
+
 function normalizeTag(tag) {
   const t = tag.toLowerCase();
   return TAG_ALIASES[t] || tag.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+async function fetchCodeforcesProfile(handle) {
+  try {
+    const res = await axios.get(`https://codeforces.com/api/user.info?handles=${handle}`);
+    if (res.data.status === 'OK' && res.data.result.length > 0) {
+      const user = res.data.result[0];
+      return { rating: user.rating || 'Unrated', rank: user.rank || 'Unranked' };
+    }
+  } catch (error) {
+    console.error('CF Profile Error:', error.message);
+  }
+  return { rating: 'N/A', rank: 'N/A' };
+}
+
+async function fetchLeetCodeProfile(handle) {
+  try {
+    const [profileRes, contestRes] = await Promise.all([
+      axios.get(`https://alfa-leetcode-api.onrender.com/userProfile/${handle}`).catch(() => null),
+      axios.get(`https://alfa-leetcode-api.onrender.com/${handle}/contest`).catch(() => null)
+    ]);
+    
+    let totalSolved = 0;
+    if (profileRes && profileRes.data && profileRes.data.matchedUserStats) {
+      const allStats = profileRes.data.matchedUserStats.acSubmissionNum.find(d => d.difficulty === 'All');
+      if (allStats) totalSolved = allStats.count;
+    }
+
+    let contestRating = 'Unrated';
+    if (contestRes && contestRes.data && contestRes.data.contestParticipation) {
+      const participation = contestRes.data.contestParticipation;
+      if (participation.length > 0) {
+        contestRating = Math.round(participation[participation.length - 1].rating);
+      }
+    }
+    return { totalSolved, contestRating };
+  } catch (error) {
+    console.error('LC Profile Error:', error.message);
+    return { totalSolved: 0, contestRating: 'N/A' };
+  }
 }
 
 async function fetchCodeforcesTags(handle) {
@@ -55,9 +138,9 @@ async function fetchCodeforcesTags(handle) {
         }
       }
     });
-    return tagsCount;
+    return { tagsCount, solvedProblems };
   } catch (error) {
-    return {};
+    return { tagsCount: {}, solvedProblems: new Set() };
   }
 }
 
@@ -91,7 +174,41 @@ async function fetchLeetCodeTags(handle) {
   }
 }
 
-function aggregateTags(cfData, lcData) {
+async function buildRecommendations(weaknesses, solvedProblems, cfRating) {
+  const problemset = await getCFProblemset();
+  if (!problemset || problemset.length === 0) return weaknesses; // Fallback if API fails
+
+  // Target rating is current rating + 100 to push the user, or 1200 if unrated
+  const targetRating = (typeof cfRating === 'number') ? cfRating + 100 : 1200;
+
+  weaknesses.forEach(weak => {
+    const cfTag = REVERSE_TAGS[weak.subject] || weak.subject.toLowerCase();
+    
+    // Find an unsolved problem with the target tag and closest rating
+    const suitableProblems = problemset.filter(p => {
+      if (!p.rating) return false;
+      const id = `${p.contestId}-${p.index}`;
+      if (solvedProblems.has(id)) return false;
+      if (!p.tags.includes(cfTag)) return false;
+      // We want a rating within a reasonable window, e.g. targetRating +/- 200
+      return Math.abs(p.rating - targetRating) <= 200;
+    });
+
+    if (suitableProblems.length > 0) {
+      // Pick a random problem from the suitable ones to keep it fresh
+      const recommended = suitableProblems[Math.floor(Math.random() * suitableProblems.length)];
+      weak.recommendation = {
+        name: recommended.name,
+        link: `https://codeforces.com/problemset/problem/${recommended.contestId}/${recommended.index}`,
+        rating: recommended.rating
+      };
+    }
+  });
+
+  return weaknesses;
+}
+
+async function aggregateTags(cfData, lcData, solvedProblems, cfRating) {
   const merged = {};
   const process = (data) => {
     Object.entries(data).forEach(([tag, count]) => {
@@ -114,7 +231,10 @@ function aggregateTags(cfData, lcData) {
 
   const chartData = top8.map(formatTag);
   const strengths = sortedDesc.slice(0, 5).map(formatTag);
-  const weaknesses = [...validTags].sort((a, b) => a[1] - b[1]).slice(0, 5).map(formatTag);
+  let weaknesses = [...validTags].sort((a, b) => a[1] - b[1]).slice(0, 5).map(formatTag);
+
+  // Inject recommendations into weaknesses
+  weaknesses = await buildRecommendations(weaknesses, solvedProblems, cfRating);
 
   return { chartData, strengths, weaknesses };
 }
@@ -130,26 +250,36 @@ exports.analyzeProfile = async (req, res) => {
         chartData: cachedData.chartData,
         strengths: cachedData.strengths,
         weaknesses: cachedData.weaknesses,
+        profileOverview: cachedData.profileOverview,
         cached: true
       });
     }
 
-    const [cfData, lcData] = await Promise.all([
-      cfHandle ? fetchCodeforcesTags(cfHandle) : Promise.resolve({}),
+    const [cfProfile, lcProfile, cfResponse, lcData] = await Promise.all([
+      cfHandle ? fetchCodeforcesProfile(cfHandle) : Promise.resolve({ rating: 'N/A', rank: 'N/A' }),
+      lcHandle ? fetchLeetCodeProfile(lcHandle) : Promise.resolve({ totalSolved: 0, contestRating: 'N/A' }),
+      cfHandle ? fetchCodeforcesTags(cfHandle) : Promise.resolve({ tagsCount: {}, solvedProblems: new Set() }),
       lcHandle ? fetchLeetCodeTags(lcHandle) : Promise.resolve({})
     ]);
 
-    const aggregated = aggregateTags(cfData, lcData);
+    const cfTotalSolved = cfResponse.solvedProblems.size;
+    const profileOverview = {
+      codeforces: { handle: cfHandle, rating: cfProfile.rating, rank: cfProfile.rank, totalSolved: cfTotalSolved },
+      leetcode: { handle: lcHandle, contestRating: lcProfile.contestRating, totalSolved: lcProfile.totalSolved }
+    };
+
+    const aggregated = await aggregateTags(cfResponse.tagsCount, lcData, cfResponse.solvedProblems, cfProfile.rating);
     if (aggregated.chartData.length === 0) return res.status(404).json({ error: 'No problem-solving data found.' });
 
     await UserStats.findOneAndUpdate(
       { cfHandle, lcHandle },
-      { ...aggregated, lastUpdated: Date.now() },
+      { ...aggregated, profileOverview, lastUpdated: Date.now() },
       { upsert: true, new: true }
     );
 
-    return res.json({ ...aggregated, cached: false });
+    return res.json({ ...aggregated, profileOverview, cached: false });
   } catch (error) {
+    console.error("Analysis Error:", error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };

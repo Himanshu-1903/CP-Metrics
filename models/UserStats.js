@@ -6,6 +6,7 @@ const UserStatsSchema = new mongoose.Schema({
   chartData: { type: Array, required: true },
   strengths: { type: Array, required: true },
   weaknesses: { type: Array, required: true },
+  profileOverview: { type: Object, default: {} },
   lastUpdated: { type: Date, default: Date.now }
 });
 

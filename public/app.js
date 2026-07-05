@@ -21,7 +21,11 @@ document.getElementById('searchForm').addEventListener('submit', async (e) => {
     const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cfHandle, lcHandle }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to fetch data');
+    
+    renderProfileStats(data.profileOverview);
     renderDashboard(data);
+    
+    document.getElementById('profileStats').classList.remove('hidden');
     dashboardGrid.classList.remove('hidden');
   } catch (err) {
     errorBox.textContent = err.message;
@@ -32,10 +36,25 @@ document.getElementById('searchForm').addEventListener('submit', async (e) => {
   }
 });
 
+function renderProfileStats(overview) {
+  if (!overview) return;
+  const cf = overview.codeforces;
+  const lc = overview.leetcode;
+  
+  document.getElementById('cfDisplayHandle').textContent = cf.handle || 'Codeforces';
+  document.getElementById('cfRank').textContent = cf.rank.toUpperCase();
+  document.getElementById('cfRating').textContent = cf.rating;
+  document.getElementById('cfSolved').textContent = cf.totalSolved;
+
+  document.getElementById('lcDisplayHandle').textContent = lc.handle || 'LeetCode';
+  document.getElementById('lcRating').textContent = lc.contestRating;
+  document.getElementById('lcSolved').textContent = lc.totalSolved;
+}
+
 function renderDashboard(data) {
   renderChart(data.chartData);
-  renderList('strengthsList', data.strengths, 'badge-strength');
-  renderList('weaknessesList', data.weaknesses, 'badge-weakness');
+  renderList('strengthsList', data.strengths, 'badge-strength', false);
+  renderList('weaknessesList', data.weaknesses, 'badge-weakness', true);
 }
 
 function renderChart(chartData) {
@@ -61,13 +80,32 @@ function renderChart(chartData) {
   });
 }
 
-function renderList(containerId, items, badgeClass) {
+function renderList(containerId, items, badgeClass, isWeakness) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
   items.forEach(item => {
     const div = document.createElement('div');
     div.className = 'list-item';
-    div.innerHTML = `<span style="font-weight: 500">${item.subject}</span><span class="${badgeClass}">${item.A} solved</span>`;
+    
+    let html = `
+      <div class="item-info">
+        <span style="font-weight: 500">${item.subject}</span>
+        <span class="${badgeClass}">${item.A} solved</span>
+      </div>
+    `;
+
+    if (isWeakness && item.recommendation) {
+      html += `
+        <div class="recommendation">
+          <span class="rec-label">Target:</span>
+          <a href="${item.recommendation.link}" target="_blank" class="rec-link" title="Rating: ${item.recommendation.rating}">
+            ${item.recommendation.name} ↗
+          </a>
+        </div>
+      `;
+    }
+
+    div.innerHTML = html;
     container.appendChild(div);
   });
 }
