@@ -12,6 +12,8 @@ This specific version of the app is engineered for speed and simplicity—utiliz
 
 - **Express.js API Gateway:** All requests to external Codeforces and LeetCode endpoints are securely handled server-side, preventing CORS issues.
 - **MongoDB Caching Engine:** Automatically caches user statistics for 24 hours in a MongoDB cluster to drastically improve load speeds for repeat searches.
+- **Smart Recommendation Engine:** Actively filters the entire Codeforces problemset in-memory against a user's *solved history* to recommend a highly personalized target problem based on their weakest topics and current ELO rating. It also maps obscure tags to the closest LeetCode category to provide a top-tier LeetCode target.
+- **Profile Overviews:** Calculates and aggregates high-level metrics (Total Solved, Global Rank, Contest Rating) into sleek Stat Cards.
 - **Pure Vanilla Frontend:** No React, no Webpack, no build step. The UI is delivered instantly using static HTML, CSS, and vanilla JS.
 - **Dynamic Radar Charts:** Integrates **Chart.js** via CDN to beautifully map out your top 8 algorithmic topics.
 - **Premium Glassmorphism UI:** Features native CSS variables, flexbox/grid layouts, and a sleek dark-mode aesthetic.
