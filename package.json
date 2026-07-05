@@ -1,0 +1,19 @@
+{
+  "name": "algometrics-node",
+  "version": "1.0.0",
+  "description": "### 📸 Screenshots *(Note: Save the 3 screenshots you took into this repository as `screenshot1.png`, `screenshot2.png`, and `screenshot3.png` to display them here!)*",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.18.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongoose": "^9.7.3"
+  }
+}

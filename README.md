@@ -1,16 +1,6 @@
 # 🎯 AlgoMetrics | Node.js & Vanilla JS Dashboard
 
-### 📸 Screenshots
-*(Note: Save the 3 screenshots you took into this repository as `screenshot1.png`, `screenshot2.png`, and `screenshot3.png` to display them here!)*
 
-#### 1. Handle Input & Profile Analyzer
-![Dashboard Top](./screenshot1.png)
-
-#### 2. Algorithmic Distribution (Radar Chart)
-![Algorithmic Distribution](./screenshot2.png)
-
-#### 3. Top Strengths & Weak Topics to Improve
-![Strengths and Weaknesses](./screenshot3.png)
 
 ## 🚀 Overview
 
