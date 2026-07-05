@@ -174,28 +174,55 @@ async function fetchLeetCodeTags(handle) {
   }
 }
 
+const LC_RECOMMENDATIONS = {
+  'dp': { name: 'Coin Change', link: 'https://leetcode.com/problems/coin-change/' },
+  'math': { name: 'Pow(x, n)', link: 'https://leetcode.com/problems/powx-n/' },
+  'graphs': { name: 'Number of Islands', link: 'https://leetcode.com/problems/number-of-islands/' },
+  'two pointers': { name: 'Container With Most Water', link: 'https://leetcode.com/problems/container-with-most-water/' },
+  'greedy': { name: 'Jump Game', link: 'https://leetcode.com/problems/jump-game/' },
+  'string': { name: 'Longest Substring', link: 'https://leetcode.com/problems/longest-substring-without-repeating-characters/' },
+  'data structures': { name: 'LRU Cache', link: 'https://leetcode.com/problems/lru-cache/' },
+  'binary search': { name: 'Search in Rotated Sorted Array', link: 'https://leetcode.com/problems/search-in-rotated-sorted-array/' },
+  'dfs and similar': { name: 'Word Search', link: 'https://leetcode.com/problems/word-search/' },
+  'trees': { name: 'Lowest Common Ancestor', link: 'https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/' },
+  'sortings': { name: 'Merge Intervals', link: 'https://leetcode.com/problems/merge-intervals/' },
+  'implementation': { name: 'Design Underground System', link: 'https://leetcode.com/problems/design-underground-system/' },
+  'brute force': { name: 'Subsets', link: 'https://leetcode.com/problems/subsets/' },
+  'constructive algorithms': { name: 'Task Scheduler', link: 'https://leetcode.com/problems/task-scheduler/' },
+  'number theory': { name: 'Count Primes', link: 'https://leetcode.com/problems/count-primes/' },
+  'geometry': { name: 'Max Points on a Line', link: 'https://leetcode.com/problems/max-points-on-a-line/' },
+  'bitmasks': { name: 'Single Number', link: 'https://leetcode.com/problems/single-number/' }
+};
+
 async function buildRecommendations(weaknesses, solvedProblems, cfRating) {
   const problemset = await getCFProblemset();
-  if (!problemset || problemset.length === 0) return weaknesses; // Fallback if API fails
+  if (!problemset || problemset.length === 0) return weaknesses; 
 
-  // Target rating is current rating + 100 to push the user, or 1200 if unrated
   const targetRating = (typeof cfRating === 'number') ? cfRating + 100 : 1200;
 
   weaknesses.forEach(weak => {
     const cfTag = REVERSE_TAGS[weak.subject] || weak.subject.toLowerCase();
     
-    // Find an unsolved problem with the target tag and closest rating
+    let lcRec = LC_RECOMMENDATIONS[cfTag];
+    if (!lcRec) {
+      if (cfTag.includes('graph') || cfTag === 'dfs and similar') lcRec = LC_RECOMMENDATIONS['graphs'];
+      else if (cfTag.includes('string')) lcRec = LC_RECOMMENDATIONS['string'];
+      else if (cfTag.includes('math') || cfTag.includes('fft')) lcRec = LC_RECOMMENDATIONS['math'];
+      else if (cfTag.includes('tree')) lcRec = LC_RECOMMENDATIONS['trees'];
+      else lcRec = { name: 'Top Interview 150', link: 'https://leetcode.com/studyplan/top-interview-150/' };
+    }
+    weak.lcRecommendation = lcRec;
+    
+    // Codeforces dynamic recommendation
     const suitableProblems = problemset.filter(p => {
       if (!p.rating) return false;
       const id = `${p.contestId}-${p.index}`;
       if (solvedProblems.has(id)) return false;
       if (!p.tags.includes(cfTag)) return false;
-      // We want a rating within a reasonable window, e.g. targetRating +/- 200
       return Math.abs(p.rating - targetRating) <= 200;
     });
 
     if (suitableProblems.length > 0) {
-      // Pick a random problem from the suitable ones to keep it fresh
       const recommended = suitableProblems[Math.floor(Math.random() * suitableProblems.length)];
       weak.recommendation = {
         name: recommended.name,
@@ -233,7 +260,6 @@ async function aggregateTags(cfData, lcData, solvedProblems, cfRating) {
   const strengths = sortedDesc.slice(0, 5).map(formatTag);
   let weaknesses = [...validTags].sort((a, b) => a[1] - b[1]).slice(0, 5).map(formatTag);
 
-  // Inject recommendations into weaknesses
   weaknesses = await buildRecommendations(weaknesses, solvedProblems, cfRating);
 
   return { chartData, strengths, weaknesses };
@@ -245,7 +271,11 @@ exports.analyzeProfile = async (req, res) => {
     if (!cfHandle && !lcHandle) return res.status(400).json({ error: 'Please provide at least one handle.' });
 
     const cachedData = await UserStats.findOne({ cfHandle, lcHandle });
-    if (cachedData && (Date.now() - cachedData.lastUpdated < 24 * 60 * 60 * 1000)) {
+    const isCacheValid = cachedData && (Date.now() - cachedData.lastUpdated < 24 * 60 * 60 * 1000);
+    const hasProfileStats = cachedData && cachedData.profileOverview && cachedData.profileOverview.codeforces;
+    const hasLcRecs = cachedData && cachedData.weaknesses && cachedData.weaknesses.length > 0 && cachedData.weaknesses[0].lcRecommendation;
+
+    if (isCacheValid && hasProfileStats && hasLcRecs) {
       return res.json({
         chartData: cachedData.chartData,
         strengths: cachedData.strengths,

@@ -94,15 +94,30 @@ function renderList(containerId, items, badgeClass, isWeakness) {
       </div>
     `;
 
-    if (isWeakness && item.recommendation) {
-      html += `
-        <div class="recommendation">
-          <span class="rec-label">Target:</span>
-          <a href="${item.recommendation.link}" target="_blank" class="rec-link" title="Rating: ${item.recommendation.rating}">
-            ${item.recommendation.name} ↗
-          </a>
-        </div>
-      `;
+    if (isWeakness) {
+      if (item.recommendation || item.lcRecommendation) {
+        html += `<div class="recommendation">`;
+        
+        if (item.recommendation) {
+          html += `
+            <span class="rec-label">CF:</span>
+            <a href="${item.recommendation.link}" target="_blank" class="rec-link" title="Rating: ${item.recommendation.rating}">
+              ${item.recommendation.name} ↗
+            </a>
+          `;
+        }
+
+        if (item.lcRecommendation) {
+          html += `
+            <span class="rec-label" style="margin-left: 0.75rem;">LC:</span>
+            <a href="${item.lcRecommendation.link}" target="_blank" class="rec-link lc-link">
+              ${item.lcRecommendation.name} ↗
+            </a>
+          `;
+        }
+        
+        html += `</div>`;
+      }
     }
 
     div.innerHTML = html;

@@ -68,7 +68,8 @@ body {
 .item-info { display: flex; justify-content: space-between; align-items: center; width: 100%; }
 .recommendation { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.1); }
 .rec-label { color: var(--text-secondary); }
-.rec-link { color: var(--accent-secondary); text-decoration: none; font-weight: 600; transition: opacity 0.2s; }
+.rec-link { color: var(--accent-secondary); text-decoration: none; font-weight: 600; transition: opacity 0.2s; display: inline-block; }
+.rec-link.lc-link { color: #f59e0b; }
 .rec-link:hover { opacity: 0.8; text-decoration: underline; }
 
 .badge-strength { background: rgba(139, 92, 246, 0.2); color: var(--accent-primary); padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; }
